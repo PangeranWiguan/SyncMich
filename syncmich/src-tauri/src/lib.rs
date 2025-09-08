@@ -4,28 +4,39 @@
 // This is our new command function that will be called from the frontend
 #[tauri::command]
 async fn test_immich_connection(server_url: String, api_key: String) -> Result<String, String> {
-    // Construct the URL for the ping endpoint
-    // This is the CORRECT line
-    let ping_url = format!("{}/api/server/version", server_url.trim_end_matches('/'));
+    if api_key.is_empty() {
+        return Err("API Key cannot be empty.".into());
+    }
 
-    // Use the 'reqwest' library to make the HTTP request
-    match reqwest::get(&ping_url).await {
+    // The CORRECT endpoint for validating a user's key, as you discovered.
+    let validate_url = format!("{}/api/users/me", server_url.trim_end_matches('/'));
+
+    let client = reqwest::Client::new();
+
+    match client.get(&validate_url)
+        .header("x-api-key", api_key)
+        .header("Accept", "application/json")
+        .send()
+        .await {
         Ok(response) => {
             if response.status().is_success() {
-                // Success
-                Ok("Connection successful! Server is reachable.".into())
-            } else {
-                // The server responded with an error code (like 404)
+                // SUCCESS! The server gave a 200 OK response.
+                Ok("Success! API Key is valid and authenticated.".into())
+            } else if response.status().as_u16() == 401 {
+                // The server gave a 401 Unauthorized, meaning the key is wrong.
+                Err("API Key is not valid. Please check and try again.".into())
+            }
+            else {
+                // Handle other errors.
                 Err(format!("Server responded with status: {}", response.status()))
             }
         }
         Err(e) => {
-            // A network error occurred (like the server being offline)
+            // A network error occurred
             Err(e.to_string())
         }
     }
 }
-
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
