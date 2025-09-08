@@ -1,9 +1,12 @@
 <script lang="ts">
-  import { invoke } from "@tauri-apps/api/core";
+  import { core, dialog } from '@tauri-apps/api';
 
   let serverUrl = "";
   let apiKey = "";
   let connectionStatus = "Enter your server details to get started.";
+  let selectedFolder: string | null = null;
+  let folderError: string | null = null;
+
 
   // This is the function our button will call.
   async function testConnection() {
@@ -11,7 +14,7 @@
 
     try {
         // This calls our Rust function named 'test_immich_connection'
-        const result: string = await invoke("test_immich_connection", {
+        const result: string = await core.invoke("test_immich_connection", {
             serverUrl, // This passes the value from the input box to Rust
             apiKey,    // This also gets passed to Rust
         });
@@ -22,6 +25,29 @@
         // This will run if the Rust function returned an error
         connectionStatus = `❌ Connection Error: ${error}`;
     }
+}
+async function selectFolder() {
+  folderError = null; // Clear any previous errors
+  try {
+    // This opens the native OS folder selection dialog
+    const result = await dialog.open({
+      directory: true, // We want to select a directory
+      multiple: false, // We only want to select one
+      title: "Select a folder to sync with Immich"
+    });
+
+    if (typeof result === 'string') {
+      // User selected a folder
+      selectedFolder = result;
+    } else {
+      // User cancelled the dialog, do nothing.
+      console.log("User cancelled folder selection.");
+    }
+  } catch (err) {
+    // Handle potential errors from the dialog
+    folderError = "Could not open folder dialog: " + err;
+    console.error(folderError);
+  }
 }
 </script>
 
@@ -48,6 +74,20 @@
       bind:value={apiKey}
     />
   </div>
+
+  <!-- FOLDER SELECTION SECTION -->
+<div class="folder-selection">
+  <h2>Folder to Sync</h2>
+  <p class="description">Select a folder on your computer to automatically back up.</p>
+  <button on:click={selectFolder}>Select Folder...</button>
+
+  {#if selectedFolder}
+    <div class="selected-path">
+      <p>Watching:</p>
+      <code>{selectedFolder}</code>
+    </div>
+  {/if}
+</div>
 
   <button on:click={testConnection}>Test Connection</button>
 
@@ -116,4 +156,36 @@
     margin-top: 20px;
     color: var(--secondary-color);
   }
+  .folder-selection {
+  margin-top: 40px;
+  padding-top: 20px;
+  border-top: 1px solid #eee;
+}
+
+.folder-selection h2 {
+  margin-bottom: 5px;
+}
+
+.folder-selection .description {
+  margin-bottom: 20px;
+  color: var(--secondary-color);
+}
+
+.selected-path {
+  margin-top: 20px;
+  padding: 10px;
+  background-color: #f0f0f0;
+  border-radius: 5px;
+  text-align: left;
+}
+
+.selected-path p {
+  margin: 0 0 5px 0;
+  font-size: 0.9em;
+  color: var(--secondary-color);
+}
+
+.selected-path code {
+  word-wrap: break-word; /* Make sure long paths don't break the layout */
+}
 </style>
